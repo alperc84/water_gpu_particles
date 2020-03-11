@@ -1,0 +1,250 @@
+[gd_scene load_steps=9 format=2]
+
+[ext_resource path="res://particle.png" type="Texture" id=1]
+
+[sub_resource type="Shader" id=1]
+code = "shader_type particles;
+
+uniform sampler2D collision_mask : hint_black;
+
+
+float rand_from_seed(inout uint seed) {
+	int k;
+	int s = int(seed);
+	if (s == 0)
+	s = 305420679;
+	k = s / 127773;
+	s = 16807 * (s - k * 127773) - 2836 * k;
+	if (s < 0)
+		s += 2147483647;
+	seed = uint(s);
+	return float(seed % uint(65536)) / 65535.0;
+}
+
+float rand_from_seed_m1_p1(inout uint seed) {
+	return rand_from_seed(seed) * 2.0 - 1.0;
+}
+
+uint hash(uint x) {
+	x = ((x >> uint(16)) ^ x) * uint(73244475);
+	x = ((x >> uint(16)) ^ x) * uint(73244475);
+	x = (x >> uint(16)) ^ x;
+	return x;
+}
+
+void vertex() {
+	uint base_number = NUMBER;// / uint(trail_divisor);
+	uint alt_seed = hash(base_number + uint(1) + RANDOM_SEED);
+	float angle_rand = rand_from_seed(alt_seed);
+
+
+	if (RESTART) {
+		VELOCITY.x = 25. * rand_from_seed(alt_seed) + 25.;
+		float scale = 0.5 * 0.5 * rand_from_seed(alt_seed);
+		TRANSFORM[0].xyz *= scale;
+		TRANSFORM[1].xyz *= scale;
+		TRANSFORM[3].y = 60. + 4. * rand_from_seed(alt_seed);
+		//TRANSFORM[3].x = 100. * rand_from_seed( alt_seed );
+		
+	} else {
+		VELOCITY.y += 100. * DELTA;
+		vec2 texpos = ( TRANSFORM[3].xy + VELOCITY.xy * DELTA ) / vec2( 320., 180. );
+		vec4 ca = texture( collision_mask, texpos ).rgba;
+		if( ca.a > 0.5 )
+		{
+			vec3 n = ( ca.rgb - 0.5 ) * vec3( 2., 2., 0. );
+			VELOCITY = reflect(VELOCITY, n) * vec3( 1.0, 0.4, 0.0 );
+		}
+//		if( a > 0.5 )
+//		{
+//			//COLOR = vec4( 1., 0., 0., 1. );
+//			VELOCITY = -VELOCITY * 0.5;
+//		}
+	}
+//	float tex_scale = 1.0;
+//	float tex_hue_variation = 0.0;
+//	float hue_rot_angle = (hue_variation + tex_hue_variation) * pi * 2.0 * mix(1.0, hue_rot_rand * 2.0 - 1.0, hue_variation_random);
+//	float hue_rot_c = cos(hue_rot_angle);
+//	float hue_rot_s = sin(hue_rot_angle);
+//	mat4 hue_rot_mat = mat4(vec4(0.299, 0.587, 0.114, 0.0),
+//			vec4(0.299, 0.587, 0.114, 0.0),
+//			vec4(0.299, 0.587, 0.114, 0.0),
+//			vec4(0.000, 0.000, 0.000, 1.0)) +
+//		mat4(vec4(0.701, -0.587, -0.114, 0.0),
+//			vec4(-0.299, 0.413, -0.114, 0.0),
+//			vec4(-0.300, -0.588, 0.886, 0.0),
+//			vec4(0.000, 0.000, 0.000, 0.0)) * hue_rot_c +
+//		mat4(vec4(0.168, 0.330, -0.497, 0.0),
+//			vec4(-0.328, 0.035,  0.292, 0.0),
+//			vec4(1.250, -1.050, -0.203, 0.0),
+//			vec4(0.000, 0.000, 0.000, 0.0)) * hue_rot_s;
+//	COLOR = hue_rot_mat * color_value;
+//
+//	TRANSFORM[0] = vec4(cos(CUSTOM.x), -sin(CUSTOM.x), 0.0, 0.0);
+//	TRANSFORM[1] = vec4(sin(CUSTOM.x), cos(CUSTOM.x), 0.0, 0.0);
+//	TRANSFORM[2] = vec4(0.0, 0.0, 1.0, 0.0);
+//	float base_scale = tex_scale * mix(scale, 1.0, scale_random * scale_rand);
+//	if (base_scale < 0.000001) {
+//		base_scale = 0.000001;
+//	}
+//	TRANSFORM[0].xyz *= base_scale;
+//	TRANSFORM[1].xyz *= base_scale;
+//	TRANSFORM[2].xyz *= base_scale;
+//	VELOCITY.z = 0.0;
+//	TRANSFORM[3].z = 0.0;
+//	if (CUSTOM.y > CUSTOM.w) {		ACTIVE = false;
+//	}
+}
+
+"
+
+[sub_resource type="ViewportTexture" id=2]
+viewport_path = NodePath("collision_mask_polygon")
+
+[sub_resource type="ShaderMaterial" id=3]
+resource_local_to_scene = true
+shader = SubResource( 1 )
+shader_param/collision_mask = SubResource( 2 )
+
+[sub_resource type="Shader" id=4]
+code = "shader_type canvas_item;
+
+void fragment()
+{
+	vec2 px = TEXTURE_PIXEL_SIZE;
+	float a = texture( TEXTURE, UV ).a;
+	a += texture( TEXTURE, UV + vec2( -px.x, -px.y ) ).a;
+	a += texture( TEXTURE, UV + vec2( 0., -px.y ) ).a;
+	a += texture( TEXTURE, UV + vec2( px.x, -px.y ) ).a;
+	a += texture( TEXTURE, UV + vec2( -px.x, 0. ) ).a;
+	a += texture( TEXTURE, UV + vec2( px.x, 0. ) ).a;
+	a += texture( TEXTURE, UV + vec2( -px.x, px.y ) ).a;
+	a += texture( TEXTURE, UV + vec2( 0., px.y ) ).a;
+	a += texture( TEXTURE, UV + vec2( px.x, px.y ) ).a;
+	a /= 9.;
+	//a = step( 0.5, a );
+	if( a > 0.8 )
+	{
+		COLOR = vec4( vec3( 1.0 ), 1.0 );
+	}
+	else if( a > 0.5 )
+	{
+		COLOR = vec4( vec3( 0.4 ), 1.0 );
+	}
+	else
+		COLOR = vec4( 0. );
+}"
+
+[sub_resource type="ShaderMaterial" id=5]
+shader = SubResource( 4 )
+
+[sub_resource type="ViewportTexture" id=6]
+viewport_path = NodePath("particles_viewport")
+
+[sub_resource type="ViewportTexture" id=7]
+viewport_path = NodePath("collision_mask_polygon")
+
+[node name="main" type="Node2D"]
+
+[node name="polygon_mask2" type="Polygon2D" parent="."]
+visible = false
+polygon = PoolVector2Array( -16, 72, 32, 72, 32, 104, 72, 104, 72, 128, 168, 128, 168, 192, -16, 192 )
+
+[node name="normal_up_1" type="Polygon2D" parent="polygon_mask2"]
+color = Color( 0.498039, 0, 0.498039, 1 )
+polygon = PoolVector2Array( -16, 72, -8, 80, 24, 80, 32, 72 )
+
+[node name="normal_up_2" type="Polygon2D" parent="polygon_mask2"]
+position = Vector2( 48, 32 )
+color = Color( 0.498039, 0, 0.498039, 1 )
+polygon = PoolVector2Array( -16, 72, -8, 80, 16, 80, 24, 72 )
+
+[node name="normal_up_3" type="Polygon2D" parent="polygon_mask2"]
+position = Vector2( 88, 56 )
+color = Color( 0.498039, 0, 0.498039, 1 )
+polygon = PoolVector2Array( -16, 72, -8, 80, 72, 80, 80, 72 )
+
+[node name="normal_right_1" type="Polygon2D" parent="polygon_mask2"]
+position = Vector2( 48, 0 )
+color = Color( 1, 0.498039, 0.498039, 1 )
+polygon = PoolVector2Array( -16, 72, -24, 80, -24, 96, -16, 104 )
+
+[node name="normal_right_2" type="Polygon2D" parent="polygon_mask2"]
+position = Vector2( 88, 32 )
+color = Color( 1, 0.498039, 0.498039, 1 )
+polygon = PoolVector2Array( -16, 72, -24, 80, -24, 88, -16, 96 )
+
+[node name="normal_right_3" type="Polygon2D" parent="polygon_mask2"]
+position = Vector2( 184, 56 )
+color = Color( 1, 0.498039, 0.498039, 1 )
+polygon = PoolVector2Array( -16, 72, -24, 80, -24, 128, -16, 136 )
+
+[node name="collision_mask_polygon" type="Viewport" parent="."]
+size = Vector2( 320, 180 )
+transparent_bg = true
+handle_input_locally = false
+render_target_v_flip = true
+
+[node name="polygon_mask3" type="Polygon2D" parent="collision_mask_polygon"]
+position = Vector2( 16, 0 )
+polygon = PoolVector2Array( -16, 72, 32, 72, 32, 104, 72, 104, 72, 128, 168, 128, 168, 192, -16, 192 )
+
+[node name="normal_up_1" type="Polygon2D" parent="collision_mask_polygon/polygon_mask3"]
+color = Color( 0.498039, 0, 0.498039, 1 )
+polygon = PoolVector2Array( -16, 72, -8, 80, 24, 80, 32, 72 )
+
+[node name="normal_up_2" type="Polygon2D" parent="collision_mask_polygon/polygon_mask3"]
+position = Vector2( 48, 32 )
+color = Color( 0.498039, 0, 0.498039, 1 )
+polygon = PoolVector2Array( -16, 72, -8, 80, 16, 80, 24, 72 )
+
+[node name="normal_up_3" type="Polygon2D" parent="collision_mask_polygon/polygon_mask3"]
+position = Vector2( 88, 56 )
+color = Color( 0.498039, 0, 0.498039, 1 )
+polygon = PoolVector2Array( -16, 72, -8, 80, 72, 80, 80, 72 )
+
+[node name="normal_right_1" type="Polygon2D" parent="collision_mask_polygon/polygon_mask3"]
+position = Vector2( 48, 0 )
+color = Color( 1, 0.498039, 0.498039, 1 )
+polygon = PoolVector2Array( -16, 72, -24, 80, -24, 96, -16, 104 )
+
+[node name="normal_right_2" type="Polygon2D" parent="collision_mask_polygon/polygon_mask3"]
+position = Vector2( 88, 32 )
+color = Color( 1, 0.498039, 0.498039, 1 )
+polygon = PoolVector2Array( -16, 72, -24, 80, -24, 88, -16, 96 )
+
+[node name="normal_right_3" type="Polygon2D" parent="collision_mask_polygon/polygon_mask3"]
+position = Vector2( 184, 56 )
+color = Color( 1, 0.498039, 0.498039, 1 )
+polygon = PoolVector2Array( -16, 72, -24, 80, -24, 128, -16, 136 )
+
+[node name="particles_viewport" type="Viewport" parent="."]
+size = Vector2( 320, 180 )
+transparent_bg = true
+handle_input_locally = false
+render_target_v_flip = true
+
+[node name="water_particles" type="Particles2D" parent="particles_viewport"]
+amount = 10000
+lifetime = 10.0
+visibility_rect = Rect2( -100, -100, 200, 400 )
+process_material = SubResource( 3 )
+texture = ExtResource( 1 )
+
+[node name="draw" type="TextureRect" parent="."]
+material = SubResource( 5 )
+margin_right = 40.0
+margin_bottom = 40.0
+texture = SubResource( 6 )
+__meta__ = {
+"_edit_use_anchors_": false
+}
+
+[node name="test" type="TextureRect" parent="."]
+modulate = Color( 1, 1, 1, 0.0627451 )
+margin_right = 40.0
+margin_bottom = 40.0
+texture = SubResource( 7 )
+__meta__ = {
+"_edit_use_anchors_": false
+}
